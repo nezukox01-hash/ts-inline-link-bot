@@ -1,137 +1,123 @@
 export default {
   async fetch(request, env) {
     try {
-      // Telegram webhooks always expect HTTP 200
+      // Telegram always expects HTTP 200
       if (request.method !== "POST") {
         return new Response("OK", { status: 200 });
       }
 
-      // Parse incoming Telegram update
       const update = await request.json();
 
       // ================================
-      // INLINE MODE HANDLER
-      // Triggered when user types:
-      // @YourBotUsername ...
+      // INLINE MODE (@botusername ...)
       // ================================
       if (update.inline_query) {
         await handleInline(update.inline_query, env);
         return new Response("OK", { status: 200 });
       }
 
-      // Get message update (normal chat messages)
+      // Normal message updates
       const msg = update.message || update.edited_message;
 
       // ================================
       // /start COMMAND (health check)
-      // Used to verify bot + deploy works
       // ================================
       if (msg && msg.chat && msg.text && msg.text.startsWith("/start")) {
         await sendMessage(
           env,
           msg.chat.id,
-          "👋 Welcome!\n\n" +
-            "✅ Bot is running successfully.\n\n" +
-            "Inline usage:\n" +
-            "@TSquicklink_bot Notes www.fb.com\n\n" +
-            "Optional old style:\n" +
-            "@TSquicklink_bot Notes | www.fb.com\n\n" +
-            "Command usage:\n" +
-            "/link Notes www.fb.com\n" +
-            "/link Notes | www.fb.com\n\n" +
-            "Result:\n" +
-            "• Title will be bold\n" +
-            "• Link will be hidden (spoiler)\n" +
-            "• Link preview is OFF"
+          `👋 Welcome!
+
+✅ Bot is running successfully.
+
+Inline usage:
+@TSquicklink_bot Notes www.fb.com
+
+Optional old style:
+@TSquicklink_bot Notes | www.fb.com
+
+Command usage:
+/link Notes www.fb.com
+/link Notes | www.fb.com
+
+Result:
+- Title will be bold
+- Link will be hidden (spoiler)
+- Link preview is OFF`
         );
         return new Response("OK", { status: 200 });
       }
 
       // ================================
-      // /link COMMAND (normal command mode)
-      // Usage:
-      // /link Notes www.fb.com
-      // /link Notes | www.fb.com
+      // /link COMMAND
       // ================================
       if (msg && msg.chat && msg.text && msg.text.startsWith("/link")) {
-        // Remove "/link" or "/link@BotUsername"
+        // Remove /link or /link@BotUsername
         const input = msg.text.replace(/^\/link(@\w+)?\s*/i, "");
-
         const { title, link } = parseTitleAndLink(input);
 
-        // If no link found, show a small guide
         if (!link) {
           await sendMessage(
             env,
             msg.chat.id,
-            "❌ Please provide a link.\n\nExamples:\n" +
-              "/link Notes www.fb.com\n" +
-              "/link Notes | www.fb.com"
+            `❌ Please provide a link.
+
+Examples:
+/link Notes www.fb.com
+/link Notes | www.fb.com`
           );
           return new Response("OK", { status: 200 });
         }
 
-        const visibleText = title + "\n";
-        const fullText = visibleText + link;
+        const visible = `${title}\n`;
+        const full = visible + link;
 
-        // Send formatted message (bold title + spoiler link)
-        await fetch(
-          "https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendMessage",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: msg.chat.id,
-              text: fullText,
-              disable_web_page_preview: true,
-              entities: [
-                { type: "bold", offset: 0, length: title.length },
-                { type: "spoiler", offset: visibleText.length, length: link.length }
-              ]
-            })
-          }
-        );
+        await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: msg.chat.id,
+            text: full,
+            disable_web_page_preview: true,
+            entities: [
+              { type: "bold", offset: 0, length: title.length },
+              { type: "spoiler", offset: visible.length, length: link.length }
+            ]
+          })
+        });
 
         return new Response("OK", { status: 200 });
       }
 
       return new Response("OK", { status: 200 });
     } catch (e) {
-      // Never return 500 to Telegram
+      // Never return 500
       return new Response("OK", { status: 200 });
     }
   }
 };
 
-//
 // =====================================================
-// FUNCTION: parseTitleAndLink
-// PURPOSE:
-//   Extract title and link from user input (inline or /link)
-//
-// SUPPORTED INPUTS:
-//   1) "Notes www.fb.com"
-//   2) "Notes | www.fb.com"
-//   3) "www.fb.com"  (auto title)
-//
-// RULES:
-//   - If '|' exists → split by |
-//   - Else → detect first link-like word
+// Parse title + link from input
+// Supports:
+// 1) Notes www.fb.com
+// 2) Notes | www.fb.com
+// 3) www.fb.com
 // =====================================================
-//
 function parseTitleAndLink(input) {
   const s = (input || "").trim();
   if (!s) return { title: "Link", link: "" };
 
-  // ---------- Old style: Title | link ----------
+  // Old style: Title | link
   if (s.includes("|")) {
     const parts = s.split("|").map(p => p.trim()).filter(Boolean);
-    const title = parts[0] || "Link";
-    const link = normalizeLink(parts[1] || "");
-    return { title, link };
+    return {
+      title: parts[0] || "Link",
+      link: normalizeLink(parts[1] || "")
+    };
   }
 
-  // ---------- Auto detect link anywhere ----------
+  // Auto detect link
   const tokens = s.split(/\s+/);
   let linkIndex = -1;
 
@@ -142,24 +128,20 @@ function parseTitleAndLink(input) {
     }
   }
 
-  // No link found
   if (linkIndex === -1) {
     return { title: s, link: "" };
   }
 
-  const link = normalizeLink(tokens[linkIndex]);
-  const title = tokens.slice(0, linkIndex).join(" ").trim() || "Link";
-
-  return { title, link };
+  return {
+    title: tokens.slice(0, linkIndex).join(" ").trim() || "Link",
+    link: normalizeLink(tokens[linkIndex])
+  };
 }
 
-//
-// Check whether a word looks like a URL
-//
+// Detect link-like words
 function looksLikeLink(word) {
   if (!word) return false;
   const x = word.toLowerCase();
-
   return (
     x.startsWith("http://") ||
     x.startsWith("https://") ||
@@ -171,52 +153,45 @@ function looksLikeLink(word) {
   );
 }
 
-//
-// Ensure URL has protocol
-//
+// Ensure https://
 function normalizeLink(raw) {
-  const x = (raw || "").trim();
-  if (!x) return "";
-  if (x.startsWith("http://") || x.startsWith("https://")) return x;
-  return "https://" + x;
+  if (!raw) return "";
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+  return "https://" + raw;
 }
 
-//
 // =====================================================
 // INLINE HANDLER
-// - Shows HELP card if link is missing
-// - Shows FINAL card if link exists
 // =====================================================
-//
 async function handleInline(inlineQuery, env) {
   const q = (inlineQuery.query || "").trim();
   const { title, link } = parseTitleAndLink(q);
 
   let results = [];
 
-  // ---------- HELP RESULT ----------
+  // HELP CARD (when no link)
   if (!link) {
     results.push({
       type: "article",
       id: "help",
-      title: "TOUHID says, Type: Title <space> Link",
+      title: "Type: Title <space> Link",
       description: "Example: Notes www.fb.com or Notes | www.fb.com",
       input_message_content: {
-        message_text:
-          "✅ Example (no need | ):\n" +
-          "@TSquicklink_bot Notes www.fb.com\n\n" +
-          "Optional old style:\n" +
-          "@TSquicklink_bot Notes | www.fb.com\n\n" +
-          "Command usage:\n" +
-          "/link Notes www.fb.com\n" +
-          "/link Notes | www.fb.com",
+        message_text: `✅ Example (no need | ):
+@TSquicklink_bot Notes www.fb.com
+
+Optional old style:
+@TSquicklink_bot Notes | www.fb.com
+
+Command usage:
+/link Notes www.fb.com
+/link Notes | www.fb.com`,
         disable_web_page_preview: true
       }
     });
   } else {
-    // ---------- FINAL LINK RESULT ----------
-    const visibleText = title + "\n";
-    const fullText = visibleText + link;
+    const visible = `${title}\n`;
+    const full = visible + link;
 
     results.push({
       type: "article",
@@ -224,54 +199,38 @@ async function handleInline(inlineQuery, env) {
       title: title,
       description: link,
       input_message_content: {
-        message_text: fullText,
+        message_text: full,
         disable_web_page_preview: true,
         entities: [
-          // Make title bold
           { type: "bold", offset: 0, length: title.length },
-          // Hide link as spoiler
-          { type: "spoiler", offset: visibleText.length, length: link.length }
+          { type: "spoiler", offset: visible.length, length: link.length }
         ]
       }
     });
   }
 
-  // Send inline results back to Telegram
-  await fetch(
-    "https://api.telegram.org/bot" +
-      env.BOT_TOKEN +
-      "/answerInlineQuery",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        inline_query_id: inlineQuery.id,
-        results: results,
-        cache_time: 1
-      })
-    }
-  );
+  await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/answerInlineQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      inline_query_id: inlineQuery.id,
+      results,
+      cache_time: 1
+    })
+  });
 }
 
-//
 // =====================================================
-// Helper: send normal message (used by /start and errors)
+// Helper: send normal message
 // =====================================================
-//
 async function sendMessage(env, chatId, text) {
-  await fetch(
-    "https://api.telegram.org/bot" +
-      env.BOT_TOKEN +
-      "/sendMessage",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: text,
-        disable_web_page_preview: true
-      })
-    }
-  );
+  await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true
+    })
+  });
 }
-```0
