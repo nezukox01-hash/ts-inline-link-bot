@@ -146,7 +146,7 @@ async function handleInline(inlineQuery, env) {
     results.push({
       type: "article",
       id: "help",
-      title: "TOUHID says, Type: Title then Link",
+      title: "TOUHID says, Type: Title <space> Link",
       description: "Example: Notes www.fb.com or Notes | www.fb.com",
       input_message_content: {
         message_text:
