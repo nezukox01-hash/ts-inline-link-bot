@@ -1,7 +1,6 @@
 export default {
   async fetch(request, env) {
     try {
-      // Telegram always expects HTTP 200
       if (request.method !== "POST") {
         return new Response("OK", { status: 200 });
       }
@@ -23,13 +22,12 @@ export default {
         update.channel_post ||
         update.edited_channel_post;
 
-      // If no message, just OK
       if (!msg || !msg.chat) {
         return new Response("OK", { status: 200 });
       }
 
       // ================================
-      // /start COMMAND
+      // /start
       // ================================
       if (msg.text && msg.text.startsWith("/start")) {
         await sendMessage(
@@ -47,7 +45,7 @@ COMMAND:
 /link Notes www.fb.com
 /link Notes | www.fb.com
 
-AUTO TAG (group privacy OFF needed):
+AUTO TAG (needs privacy OFF + delete permission):
 #url Notes www.fb.com
 #url Notes | www.fb.com
 
@@ -60,26 +58,25 @@ Result:
       }
 
       // ================================
-      // /link COMMAND
+      // /link COMMAND (no delete by default)
       // ================================
       if (msg.text && msg.text.startsWith("/link")) {
         const input = msg.text.replace(/^\/link(@\w+)?\s*/i, "");
-        await sendFormattedLink(env, msg.chat.id, input);
+        await sendFormattedLink(env, msg.chat.id, input, null); // no delete
         return new Response("OK", { status: 200 });
       }
 
       // ================================
-      // #url TRIGGER (auto)
+      // #url TRIGGER (delete user message first)
       // ================================
       if (msg.text && msg.text.trim().toLowerCase().startsWith("#url")) {
         const input = msg.text.replace(/^#url\s*/i, "");
-        await sendFormattedLink(env, msg.chat.id, input);
+        await sendFormattedLink(env, msg.chat.id, input, msg); // delete this msg
         return new Response("OK", { status: 200 });
       }
 
       return new Response("OK", { status: 200 });
     } catch (e) {
-      // Never return 500
       return new Response("OK", { status: 200 });
     }
   }
@@ -87,15 +84,12 @@ Result:
 
 // =====================================================
 // Parse title + link
-// Supports:
-// 1) Notes www.fb.com
-// 2) Notes | www.fb.com
-// 3) www.fb.com
 // =====================================================
 function parseTitleAndLink(input) {
   const s = (input || "").trim();
   if (!s) return { title: "Link", link: "" };
 
+  // Title | link
   if (s.includes("|")) {
     const parts = s.split("|").map(p => p.trim()).filter(Boolean);
     return {
@@ -104,6 +98,7 @@ function parseTitleAndLink(input) {
     };
   }
 
+  // Auto detect link token
   const tokens = s.split(/\s+/);
   let linkIndex = -1;
 
@@ -114,9 +109,7 @@ function parseTitleAndLink(input) {
     }
   }
 
-  if (linkIndex === -1) {
-    return { title: s, link: "" };
-  }
+  if (linkIndex === -1) return { title: s, link: "" };
 
   return {
     title: tokens.slice(0, linkIndex).join(" ").trim() || "Link",
@@ -172,7 +165,7 @@ COMMAND:
 /link Notes | www.fb.com
 
 AUTO:
-/ #url Notes www.fb.com`,
+#url Notes www.fb.com`,
         disable_web_page_preview: true
       }
     });
@@ -208,10 +201,10 @@ AUTO:
 }
 
 // =====================================================
-// Send formatted message (bold title + spoiler link)
-// Used by /link and #url
+// Send formatted link
+// If originalMsg is provided -> delete user's message first
 // =====================================================
-async function sendFormattedLink(env, chatId, input) {
+async function sendFormattedLink(env, chatId, input, originalMsg) {
   const { title, link } = parseTitleAndLink(input);
 
   if (!link) {
@@ -225,6 +218,18 @@ Examples:
 #url Notes www.fb.com`
     );
     return;
+  }
+
+  // ✅ Delete user's message (ONLY if provided)
+  if (originalMsg) {
+    await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/deleteMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: originalMsg.chat.id,
+        message_id: originalMsg.message_id
+      })
+    });
   }
 
   const visible = `${title}\n`;
@@ -258,4 +263,4 @@ async function sendMessage(env, chatId, text) {
       disable_web_page_preview: true
     })
   });
-        }
+}
