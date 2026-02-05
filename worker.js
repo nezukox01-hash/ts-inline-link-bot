@@ -36,14 +36,10 @@ export default {
           `👋 Welcome!
 
 ✅ Bot is running successfully.
-
+🆘 I’m Touhid, here to share tips and help.
 INLINE:
 @TSquicklink_bot Notes www.fb.com
 @TSquicklink_bot Notes | www.fb.com
-
-COMMAND:
-/link Notes www.fb.com
-/link Notes | www.fb.com
 
 AUTO TAG (needs privacy OFF + delete permission):
 #url Notes www.fb.com
@@ -54,15 +50,6 @@ Result:
 - Link spoiler (hidden)
 - Preview OFF`
         );
-        return new Response("OK", { status: 200 });
-      }
-
-      // ================================
-      // /link COMMAND (no delete by default)
-      // ================================
-      if (msg.text && msg.text.startsWith("/link")) {
-        const input = msg.text.replace(/^\/link(@\w+)?\s*/i, "");
-        await sendFormattedLink(env, msg.chat.id, input, null); // no delete
         return new Response("OK", { status: 200 });
       }
 
@@ -160,10 +147,6 @@ INLINE:
 @TSquicklink_bot Notes www.fb.com
 @TSquicklink_bot Notes | www.fb.com
 
-COMMAND:
-/link Notes www.fb.com
-/link Notes | www.fb.com
-
 AUTO:
 #url Notes www.fb.com`,
         disable_web_page_preview: true
@@ -214,7 +197,6 @@ async function sendFormattedLink(env, chatId, input, originalMsg) {
       `❌ Link missing.
 
 Examples:
-/link Notes www.fb.com
 #url Notes www.fb.com`
     );
     return;
