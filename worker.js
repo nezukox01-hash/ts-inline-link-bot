@@ -17,12 +17,21 @@ export default {
       }
 
       // Normal message updates
-      const msg = update.message || update.edited_message;
+      const msg =
+        update.message ||
+        update.edited_message ||
+        update.channel_post ||
+        update.edited_channel_post;
+
+      // If no message, just OK
+      if (!msg || !msg.chat) {
+        return new Response("OK", { status: 200 });
+      }
 
       // ================================
-      // /start COMMAND (health check)
+      // /start COMMAND
       // ================================
-      if (msg && msg.chat && msg.text && msg.text.startsWith("/start")) {
+      if (msg.text && msg.text.startsWith("/start")) {
         await sendMessage(
           env,
           msg.chat.id,
@@ -30,20 +39,22 @@ export default {
 
 ✅ Bot is running successfully.
 
-Inline usage:
+INLINE:
 @TSquicklink_bot Notes www.fb.com
-
-Optional old style:
 @TSquicklink_bot Notes | www.fb.com
 
-Command usage:
+COMMAND:
 /link Notes www.fb.com
 /link Notes | www.fb.com
 
+AUTO TAG (group privacy OFF needed):
+#url Notes www.fb.com
+#url Notes | www.fb.com
+
 Result:
-- Title will be bold
-- Link will be hidden (spoiler)
-- Link preview is OFF`
+- Title bold
+- Link spoiler (hidden)
+- Preview OFF`
         );
         return new Response("OK", { status: 200 });
       }
@@ -51,41 +62,18 @@ Result:
       // ================================
       // /link COMMAND
       // ================================
-      if (msg && msg.chat && msg.text && msg.text.startsWith("/link")) {
-        // Remove /link or /link@BotUsername
+      if (msg.text && msg.text.startsWith("/link")) {
         const input = msg.text.replace(/^\/link(@\w+)?\s*/i, "");
-        const { title, link } = parseTitleAndLink(input);
+        await sendFormattedLink(env, msg.chat.id, input);
+        return new Response("OK", { status: 200 });
+      }
 
-        if (!link) {
-          await sendMessage(
-            env,
-            msg.chat.id,
-            `❌ Please provide a link.
-
-Examples:
-/link Notes www.fb.com
-/link Notes | www.fb.com`
-          );
-          return new Response("OK", { status: 200 });
-        }
-
-        const visible = `${title}\n`;
-        const full = visible + link;
-
-        await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: msg.chat.id,
-            text: full,
-            disable_web_page_preview: true,
-            entities: [
-              { type: "bold", offset: 0, length: title.length },
-              { type: "spoiler", offset: visible.length, length: link.length }
-            ]
-          })
-        });
-
+      // ================================
+      // #url TRIGGER (auto)
+      // ================================
+      if (msg.text && msg.text.trim().toLowerCase().startsWith("#url")) {
+        const input = msg.text.replace(/^#url\s*/i, "");
+        await sendFormattedLink(env, msg.chat.id, input);
         return new Response("OK", { status: 200 });
       }
 
@@ -97,52 +85,8 @@ Examples:
   }
 };
 
-// ================================
-// #url TRIGGER (auto mode)
-// Usage:
-// #url Notes www.fb.com
-// #url Notes | www.fb.com
-// ================================
-if (msg && msg.chat && msg.text && msg.text.trim().toLowerCase().startsWith("#url")) {
-  // Remove "#url" and any spaces
-  const input = msg.text.replace(/^#url\s*/i, "");
-
-  const { title, link } = parseTitleAndLink(input);
-
-  if (!link) {
-    await sendMessage(
-      env,
-      msg.chat.id,
-      `❌ Please provide a link after #url
-
-Examples:
-#url Notes www.fb.com
-#url Notes | www.fb.com`
-    );
-    return new Response("OK", { status: 200 });
-  }
-
-  const visible = `${title}\n`;
-  const full = visible + link;
-
-  await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: msg.chat.id,
-      text: full,
-      disable_web_page_preview: true,
-      entities: [
-        { type: "bold", offset: 0, length: title.length },
-        { type: "spoiler", offset: visible.length, length: link.length }
-      ]
-    })
-  });
-
-  return new Response("OK", { status: 200 });
-}
 // =====================================================
-// Parse title + link from input
+// Parse title + link
 // Supports:
 // 1) Notes www.fb.com
 // 2) Notes | www.fb.com
@@ -152,7 +96,6 @@ function parseTitleAndLink(input) {
   const s = (input || "").trim();
   if (!s) return { title: "Link", link: "" };
 
-  // Old style: Title | link
   if (s.includes("|")) {
     const parts = s.split("|").map(p => p.trim()).filter(Boolean);
     return {
@@ -161,7 +104,6 @@ function parseTitleAndLink(input) {
     };
   }
 
-  // Auto detect link
   const tokens = s.split(/\s+/);
   let linkIndex = -1;
 
@@ -182,7 +124,6 @@ function parseTitleAndLink(input) {
   };
 }
 
-// Detect link-like words
 function looksLikeLink(word) {
   if (!word) return false;
   const x = word.toLowerCase();
@@ -197,11 +138,11 @@ function looksLikeLink(word) {
   );
 }
 
-// Ensure https://
 function normalizeLink(raw) {
-  if (!raw) return "";
-  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  return "https://" + raw;
+  const x = (raw || "").trim();
+  if (!x) return "";
+  if (x.startsWith("http://") || x.startsWith("https://")) return x;
+  return "https://" + x;
 }
 
 // =====================================================
@@ -213,23 +154,25 @@ async function handleInline(inlineQuery, env) {
 
   let results = [];
 
-  // HELP CARD (when no link)
   if (!link) {
     results.push({
       type: "article",
       id: "help",
       title: "Type: Title <space> Link",
-      description: "Example: Notes www.fb.com or Notes | www.fb.com",
+      description: "Example: Notes www.fb.com OR Notes | www.fb.com",
       input_message_content: {
-        message_text: `✅ Example (no need | ):
-@TSquicklink_bot Notes www.fb.com
+        message_text: `✅ Examples:
 
-Optional old style:
+INLINE:
+@TSquicklink_bot Notes www.fb.com
 @TSquicklink_bot Notes | www.fb.com
 
-Command usage:
+COMMAND:
 /link Notes www.fb.com
-/link Notes | www.fb.com`,
+/link Notes | www.fb.com
+
+AUTO:
+/ #url Notes www.fb.com`,
         disable_web_page_preview: true
       }
     });
@@ -240,7 +183,7 @@ Command usage:
     results.push({
       type: "article",
       id: "link",
-      title: title,
+      title,
       description: link,
       input_message_content: {
         message_text: full,
@@ -265,7 +208,45 @@ Command usage:
 }
 
 // =====================================================
-// Helper: send normal message
+// Send formatted message (bold title + spoiler link)
+// Used by /link and #url
+// =====================================================
+async function sendFormattedLink(env, chatId, input) {
+  const { title, link } = parseTitleAndLink(input);
+
+  if (!link) {
+    await sendMessage(
+      env,
+      chatId,
+      `❌ Link missing.
+
+Examples:
+/link Notes www.fb.com
+#url Notes www.fb.com`
+    );
+    return;
+  }
+
+  const visible = `${title}\n`;
+  const full = visible + link;
+
+  await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: full,
+      disable_web_page_preview: true,
+      entities: [
+        { type: "bold", offset: 0, length: title.length },
+        { type: "spoiler", offset: visible.length, length: link.length }
+      ]
+    })
+  });
+}
+
+// =====================================================
+// Helper: send normal text
 // =====================================================
 async function sendMessage(env, chatId, text) {
   await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
@@ -277,4 +258,4 @@ async function sendMessage(env, chatId, text) {
       disable_web_page_preview: true
     })
   });
-}
+        }
