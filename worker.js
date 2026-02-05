@@ -11,51 +11,92 @@ export default {
         return new Response("OK", { status: 200 });
       }
 
-      // /start welcome message (health check)
+      // /start (health check)
       const msg = update.message || update.edited_message;
       if (msg && msg.chat && msg.text && msg.text.startsWith("/start")) {
         await sendMessage(
           env,
           msg.chat.id,
-          "👋 Welcome!\n\n✅ Bot is deployed & running.\n\n" +
-            "Inline usage (NO need | ):\n" +
+          "👋 Welcome!\n\n✅ Bot is running.\n\n" +
+            "✅ Use inline (NO need | ):\n" +
             "@TSquicklink_bot Notes www.fb.com\n\n" +
-            "Last word must be the link."
+            "Optional old style:\n" +
+            "@TSquicklink_bot Notes | www.fb.com"
         );
       }
 
       return new Response("OK", { status: 200 });
     } catch (e) {
-      // Never return 500 to Telegram
       return new Response("OK", { status: 200 });
     }
   }
 };
 
-// ---- Parse: "Title words ... <link>" (last word is link) ----
+// ---- Robust parse: supports BOTH formats ----
+// 1) "Title words ... <link>"  (auto, last link)
+// 2) "Title | <link>"          (optional old style)
+// 3) "<link>"                  (title auto)
 function parseTitleAndLink(input) {
-  const s = (input || "").trim();
+  let s = (input || "").trim();
   if (!s) return { title: "Link", link: "" };
 
-  const parts = s.split(/\s+/);
-  const last = parts[parts.length - 1];
-
-  if (last.startsWith("http") || last.startsWith("www.")) {
-    const link = last.startsWith("http") ? last : "https://" + last;
-    const title = parts.slice(0, -1).join(" ").trim() || "Link";
+  // Old style: Title | link
+  if (s.includes("|")) {
+    const parts = s.split("|").map(x => x.trim()).filter(Boolean);
+    const title = parts[0] || "Link";
+    const linkRaw = parts[1] || "";
+    const link = normalizeLink(linkRaw);
     return { title, link };
   }
 
-  return { title: s, link: "" };
+  // Auto style: detect FIRST link-like token anywhere
+  // (not only last word; more flexible)
+  const tokens = s.split(/\s+/);
+  let linkIndex = -1;
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (looksLikeLink(t)) {
+      linkIndex = i;
+      break;
+    }
+  }
+
+  if (linkIndex === -1) {
+    // No link found
+    return { title: s, link: "" };
+  }
+
+  const link = normalizeLink(tokens[linkIndex]);
+  const titleTokens = tokens.slice(0, linkIndex);
+  const title = titleTokens.join(" ").trim() || "Link";
+  return { title, link };
+}
+
+function looksLikeLink(t) {
+  if (!t) return false;
+  const x = t.trim();
+  return (
+    x.startsWith("http://") ||
+    x.startsWith("https://") ||
+    x.startsWith("www.") ||
+    x.includes(".com") ||
+    x.includes(".net") ||
+    x.includes(".org") ||
+    x.includes("t.me/")
+  );
+}
+
+function normalizeLink(raw) {
+  const x = (raw || "").trim();
+  if (!x) return "";
+  if (x.startsWith("http://") || x.startsWith("https://")) return x;
+  return "https://" + x; // handles www.fb.com, t.me/..., etc.
 }
 
 // ---- Inline handler ----
 async function handleInline(inlineQuery, env) {
   const q = (inlineQuery.query || "").trim();
-  const parsed = parseTitleAndLink(q);
-
-  const title = parsed.title;
-  const link = parsed.link;
+  const { title, link } = parseTitleAndLink(q);
 
   const results = [];
 
@@ -67,8 +108,10 @@ async function handleInline(inlineQuery, env) {
       description: "Example: Notes www.fb.com",
       input_message_content: {
         message_text:
-          "Example:\n@TSquicklink_bot Notes www.fb.com\n\n" +
-          "Tip: last word must be link (http... or www...)",
+          "✅ Example (NO need | ):\n" +
+          "@TSquicklink_bot Notes www.fb.com\n\n" +
+          "Optional:\n" +
+          "@TSquicklink_bot Notes | www.fb.com",
         disable_web_page_preview: true
       }
     });
@@ -103,7 +146,7 @@ async function handleInline(inlineQuery, env) {
   });
 }
 
-// ---- helper: send normal message ----
+// ---- helper ----
 async function sendMessage(env, chatId, text) {
   await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendMessage", {
     method: "POST",
@@ -111,42 +154,6 @@ async function sendMessage(env, chatId, text) {
     body: JSON.stringify({
       chat_id: chatId,
       text: text,
-      disable_web_page_preview: true
-    })
-  });
-}    body: JSON.stringify({
-      inline_query_id: inlineQuery.id,
-      results,
-      cache_time: 1
-    })
-  });
-}
-
-// -------- Send message helper --------
-async function sendMessage(env, chatId, text) {
-  await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      disable_web_page_preview: true
-    })
-  });
-}
-```0      cache_time: 1
-    })
-  });
-}
-
-// ---------- SEND MESSAGE ----------
-async function sendMessage(env, chatId, text) {
-  await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
       disable_web_page_preview: true
     })
   });
