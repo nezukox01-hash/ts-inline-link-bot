@@ -119,17 +119,7 @@ async function handleInline(inlineQuery, env) {
     disable_web_page_preview: true
   }
 });
-  description: "Example: Notes www.fb.com or Notes | www.fb.com",
-  input_message_content: {
-    message_text:
-      "✅ Example (NO need | ):\n" +
-      "@TSquicklink_bot Notes www.fb.com\n\n" +
-      "Optional:\n" +
-      "@TSquicklink_bot Notes | www.fb.com",
-    disable_web_page_preview: true
-  }
-});
-  } else {
+    } else {
     const visible = title + "\n";
     const full = visible + link;
 
