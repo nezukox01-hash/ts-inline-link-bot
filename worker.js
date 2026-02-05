@@ -97,6 +97,50 @@ Examples:
   }
 };
 
+// ================================
+// #url TRIGGER (auto mode)
+// Usage:
+// #url Notes www.fb.com
+// #url Notes | www.fb.com
+// ================================
+if (msg && msg.chat && msg.text && msg.text.trim().toLowerCase().startsWith("#url")) {
+  // Remove "#url" and any spaces
+  const input = msg.text.replace(/^#url\s*/i, "");
+
+  const { title, link } = parseTitleAndLink(input);
+
+  if (!link) {
+    await sendMessage(
+      env,
+      msg.chat.id,
+      `❌ Please provide a link after #url
+
+Examples:
+#url Notes www.fb.com
+#url Notes | www.fb.com`
+    );
+    return new Response("OK", { status: 200 });
+  }
+
+  const visible = `${title}\n`;
+  const full = visible + link;
+
+  await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: msg.chat.id,
+      text: full,
+      disable_web_page_preview: true,
+      entities: [
+        { type: "bold", offset: 0, length: title.length },
+        { type: "spoiler", offset: visible.length, length: link.length }
+      ]
+    })
+  });
+
+  return new Response("OK", { status: 200 });
+}
 // =====================================================
 // Parse title + link from input
 // Supports:
