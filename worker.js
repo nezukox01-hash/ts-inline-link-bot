@@ -7,57 +7,58 @@ export default {
 
       const update = await request.json();
 
-      // ========== INLINE MODE ==========
+      // ===== INLINE MODE =====
       if (update.inline_query) {
         await handleInline(update.inline_query, env);
         return new Response("OK", { status: 200 });
       }
 
-      // ========== NORMAL MESSAGE (/start) ==========
+      // ===== NORMAL MESSAGE (/start) =====
       const msg = update.message || update.edited_message;
-      if (!msg || !msg.chat || !msg.text) {
-        return new Response("OK", { status: 200 });
-      }
-
-      // /start command
-      if (msg.text.startsWith("/start")) {
-        await sendMessage(
-          env,
-          msg.chat.id,
-          "👋 Welcome!\n\n" +
-          "✅ Bot is deployed & running successfully.\n\n" +
-          "🔹 How to use inline mode:\n" +
-          "@YourBotUsername Title | https://t.me/username/123\n\n" +
-          "Example:\n" +
-          "@YourBotUsername Notes | https://t.me/mygroup/55"
-        );
-        return new Response("OK", { status: 200 });
+      if (msg && msg.chat && msg.text) {
+        if (msg.text.startsWith("/start")) {
+          await sendMessage(
+            env,
+            msg.chat.id,
+            "👋 Welcome!\n\n" +
+              "✅ Bot is deployed & running.\n\n" +
+              "🔹 Inline usage (NO need | ):\n" +
+              "@TSquicklink_bot Notes www.fb.com\n\n" +
+              "It will send:\n" +
+              "• Title = **bold**\n" +
+              "• Link = hidden (spoiler)\n" +
+              "• Preview card = OFF"
+          );
+        }
       }
 
       return new Response("OK", { status: 200 });
-
     } catch (e) {
+      // Never return 500 to Telegram
       return new Response("OK", { status: 200 });
     }
   }
 };
 
-// ---------- INLINE HANDLER ----------
+// -------- Parse: "Title words ... <link>" (no need | ) --------
 function parseTitleAndLink(input) {
   const s = (input || "").trim();
+  if (!s) return { title: "🔗 Link", link: "" };
 
-  if (s.includes("|")) {
-    const [t, l] = s.split("|").map(x => x.trim());
-    return { title: t || "🔗 Link", link: l || "" };
+  const parts = s.split(/\s+/);
+  const last = parts[parts.length - 1];
+
+  // Detect link automatically as the LAST word
+  if (last.startsWith("http") || last.startsWith("www.")) {
+    const link = last.startsWith("http") ? last : "https://" + last;
+    const title = parts.slice(0, -1).join(" ") || "🔗 Link";
+    return { title, link };
   }
 
-  if (s.startsWith("http")) {
-    return { title: "🔗 Link", link: s };
-  }
-
-  return { title: "🔗 Link", link: "" };
+  return { title: s, link: "" };
 }
 
+// -------- Inline handler --------
 async function handleInline(inlineQuery, env) {
   const q = (inlineQuery.query || "").trim();
   const { title, link } = parseTitleAndLink(q);
@@ -68,12 +69,13 @@ async function handleInline(inlineQuery, env) {
     results.push({
       type: "article",
       id: "help",
-      title: "Type: Title | Link",
-      description: "Example: Notes | https://t.me/mygroup/55",
+      title: "Type: Title then Link",
+      description: "Example: Notes www.fb.com",
       input_message_content: {
         message_text:
-          "ℹ️ Inline usage:\n" +
-          "Title | https://t.me/username/123",
+          "ℹ️ Write like this:\n" +
+          "@TSquicklink_bot Notes www.fb.com\n\n" +
+          "Last word must be the link (http... or www...).",
         disable_web_page_preview: true
       }
     });
@@ -90,7 +92,8 @@ async function handleInline(inlineQuery, env) {
         message_text: full,
         disable_web_page_preview: true,
         entities: [
-          { type: "spoiler", offset: visible.length, length: link.length }
+          { type: "bold", offset: 0, length: title.length }, // title bold
+          { type: "spoiler", offset: visible.length, length: link.length } // link hidden
         ]
       }
     });
@@ -103,6 +106,23 @@ async function handleInline(inlineQuery, env) {
       inline_query_id: inlineQuery.id,
       results,
       cache_time: 1
+    })
+  });
+}
+
+// -------- Send message helper --------
+async function sendMessage(env, chatId, text) {
+  await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true
+    })
+  });
+}
+```0      cache_time: 1
     })
   });
 }
