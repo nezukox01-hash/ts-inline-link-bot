@@ -38,7 +38,6 @@ export default {
 ✅ Bot is running successfully.
 
 🆘 I’m Touhid, here to share tips and help.
-INLINE:
 
 ⚠️ Admin Permission Required
 
