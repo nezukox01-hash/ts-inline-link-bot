@@ -104,17 +104,31 @@ async function handleInline(inlineQuery, env) {
     results.push({
       type: "article",
       id: "help",
-      title: "Type: Title then Link",
-      description: "Example: Notes www.fb.com",
-      input_message_content: {
-        message_text:
-          "✅ Example (NO need | ):\n" +
-          "@TSquicklink_bot Notes www.fb.com\n\n" +
-          "Optional:\n" +
-          "@TSquicklink_bot Notes | www.fb.com",
-        disable_web_page_preview: true
-      }
-    });
+      title: "TOUHID says,Type: Title then Link",
+      results.push({
+  type: "article",
+  id: "help",
+  title: "Type: Title then Link",
+  description: "Example: Notes www.fb.com or Notes | www.fb.com",
+  input_message_content: {
+    message_text:
+      "✅ Example (NO need | ):\n" +
+      "@TSquicklink_bot Notes www.fb.com\n\n" +
+      "Optional:\n" +
+      "@TSquicklink_bot Notes | www.fb.com",
+    disable_web_page_preview: true
+  }
+});
+  description: "Example: Notes www.fb.com or Notes | www.fb.com",
+  input_message_content: {
+    message_text:
+      "✅ Example (NO need | ):\n" +
+      "@TSquicklink_bot Notes www.fb.com\n\n" +
+      "Optional:\n" +
+      "@TSquicklink_bot Notes | www.fb.com",
+    disable_web_page_preview: true
+  }
+});
   } else {
     const visible = title + "\n";
     const full = visible + link;
