@@ -36,16 +36,25 @@ export default {
           `👋 Welcome!
 
 ✅ Bot is running successfully.
+
 🆘 I’m Touhid, here to share tips and help.
 INLINE:
+
+⚠️ Admin Permission Required
+
+📌 Required permissions:
+• Manage messages
+• Delete messages (optional but recommended)
+
+✳️Inline command: 
 @TSquicklink_bot Notes www.fb.com
 @TSquicklink_bot Notes | www.fb.com
 
-AUTO TAG (needs privacy OFF + delete permission):
+✳️AUTO TAG (Maybe delete permission Needed):
 #url Notes www.fb.com
 #url Notes | www.fb.com
 
-Result:
+✴️Result:
 - Title bold
 - Link spoiler (hidden)
 - Preview OFF`
