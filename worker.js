@@ -19,11 +19,13 @@ export default {
         return new Response("OK", { status: 200 });
       }
 
+      // Get message update (normal chat messages)
+      const msg = update.message || update.edited_message;
+
       // ================================
       // /start COMMAND (health check)
       // Used to verify bot + deploy works
       // ================================
-      const msg = update.message || update.edited_message;
       if (msg && msg.chat && msg.text && msg.text.startsWith("/start")) {
         await sendMessage(
           env,
@@ -34,11 +36,63 @@ export default {
             "@TSquicklink_bot Notes www.fb.com\n\n" +
             "Optional old style:\n" +
             "@TSquicklink_bot Notes | www.fb.com\n\n" +
+            "Command usage:\n" +
+            "/link Notes www.fb.com\n" +
+            "/link Notes | www.fb.com\n\n" +
             "Result:\n" +
             "• Title will be bold\n" +
             "• Link will be hidden (spoiler)\n" +
             "• Link preview is OFF"
         );
+        return new Response("OK", { status: 200 });
+      }
+
+      // ================================
+      // /link COMMAND (normal command mode)
+      // Usage:
+      // /link Notes www.fb.com
+      // /link Notes | www.fb.com
+      // ================================
+      if (msg && msg.chat && msg.text && msg.text.startsWith("/link")) {
+        // Remove "/link" or "/link@BotUsername"
+        const input = msg.text.replace(/^\/link(@\w+)?\s*/i, "");
+
+        const { title, link } = parseTitleAndLink(input);
+
+        // If no link found, show a small guide
+        if (!link) {
+          await sendMessage(
+            env,
+            msg.chat.id,
+            "❌ Please provide a link.\n\nExamples:\n" +
+              "/link Notes www.fb.com\n" +
+              "/link Notes | www.fb.com"
+          );
+          return new Response("OK", { status: 200 });
+        }
+
+        const visibleText = title + "\n";
+        const fullText = visibleText + link;
+
+        // Send formatted message (bold title + spoiler link)
+        await fetch(
+          "https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendMessage",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: msg.chat.id,
+              text: fullText,
+              disable_web_page_preview: true,
+              entities: [
+                { type: "bold", offset: 0, length: title.length },
+                { type: "spoiler", offset: visibleText.length, length: link.length }
+              ]
+            })
+          }
+        );
+
+        return new Response("OK", { status: 200 });
       }
 
       return new Response("OK", { status: 200 });
@@ -53,7 +107,7 @@ export default {
 // =====================================================
 // FUNCTION: parseTitleAndLink
 // PURPOSE:
-//   Extract title and link from user inline query
+//   Extract title and link from user input (inline or /link)
 //
 // SUPPORTED INPUTS:
 //   1) "Notes www.fb.com"
@@ -94,8 +148,7 @@ function parseTitleAndLink(input) {
   }
 
   const link = normalizeLink(tokens[linkIndex]);
-  const title =
-    tokens.slice(0, linkIndex).join(" ").trim() || "Link";
+  const title = tokens.slice(0, linkIndex).join(" ").trim() || "Link";
 
   return { title, link };
 }
@@ -153,7 +206,10 @@ async function handleInline(inlineQuery, env) {
           "✅ Example (no need | ):\n" +
           "@TSquicklink_bot Notes www.fb.com\n\n" +
           "Optional old style:\n" +
-          "@TSquicklink_bot Notes | www.fb.com",
+          "@TSquicklink_bot Notes | www.fb.com\n\n" +
+          "Command usage:\n" +
+          "/link Notes www.fb.com\n" +
+          "/link Notes | www.fb.com",
         disable_web_page_preview: true
       }
     });
@@ -199,7 +255,7 @@ async function handleInline(inlineQuery, env) {
 
 //
 // =====================================================
-// Helper: send normal message (used by /start)
+// Helper: send normal message (used by /start and errors)
 // =====================================================
 //
 async function sendMessage(env, chatId, text) {
@@ -217,4 +273,5 @@ async function sendMessage(env, chatId, text) {
       })
     }
   );
-        }
+}
+```0
