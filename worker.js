@@ -148,7 +148,7 @@ async function handleInline(inlineQuery, env) {
       type: "article",
       id: "help",
       title: "Type: Title <space> Link",
-      description: "Example: Notes www.fb.com OR Notes | www.fb.com",
+      description: "Example: Notes www.fb.com ",
       input_message_content: {
         message_text: `✅ Examples:
 
